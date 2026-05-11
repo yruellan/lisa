@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ADTv2 feature report - adt</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f1e8;
+        --panel: #fffdf8;
+        --ink: #1e1b18;
+        --muted: #6b6257;
+        --border: #d6cbb9;
+        --pass: #2f6a3d;
+        --fail: #8f2d23;
+        --skip: #8a6a1f;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Georgia, "Iowan Old Style", serif;
+        background:
+          radial-gradient(circle at top left, rgba(194, 157, 81, 0.15), transparent 28rem),
+          linear-gradient(180deg, #f8f3e7 0%, #f0e8d8 100%);
+        color: var(--ink);
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem 4rem;
+      }
+      .hero, .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 18px 40px rgba(50, 36, 18, 0.08);
+      }
+      .hero {
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+      }
+      h1, h2 {
+        margin: 0 0 0.75rem;
+        font-weight: 600;
+      }
+      p {
+        margin: 0.4rem 0;
+        color: var(--muted);
+      }
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+      .metric {
+        padding: 1rem;
+        border-radius: 18px;
+        background: #faf6ee;
+        border: 1px solid var(--border);
+      }
+      .metric strong {
+        display: block;
+        font-size: 1.75rem;
+        color: var(--ink);
+      }
+      .panel {
+        padding: 1.5rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 0.9rem 0.8rem;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        font-size: 0.9rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      tr.pass td:nth-child(2) { color: var(--pass); font-weight: 700; }
+      tr.fail td:nth-child(2) { color: var(--fail); font-weight: 700; }
+      tr.skipped td:nth-child(2) { color: var(--skip); font-weight: 700; }
+      code {
+        font-size: 0.92rem;
+      }
+      a {
+        color: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p><a href="../../">All branch reports</a></p>
+        <h1>ADTv2 feature report</h1>
+        <p>Branch: <code>adt</code></p>
+        <p>Commit: <code>a29eb23b584f19d130be03d5716188e3cc92d7bc</code></p>
+        <p>Generated at: 2026-05-11 12:49:10Z</p>
+        <div class="summary">
+          <div class="metric">
+            <span>Status</span>
+            <strong>FAIL</strong>
+          </div>
+          <div class="metric">
+            <span>Passing</span>
+            <strong>0</strong>
+          </div>
+          <div class="metric">
+            <span>Failing</span>
+            <strong>8</strong>
+          </div>
+          <div class="metric">
+            <span>Skipped</span>
+            <strong>2</strong>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Examples</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Example</th>
+              <th>Status</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+<tr class="fail"><td><code>ADTv2Examples.builder.DefineMonomorphicADTs</code></td><td>FAIL</td><td>Regression or incomplete implementation. Check the logs for this example.</td></tr>
+<tr class="fail"><td><code>ADTv2Examples.builder.DefinePolymorphicADTs</code></td><td>FAIL</td><td>Regression or incomplete implementation. Check the logs for this example.</td></tr>
+<tr class="fail"><td><code>ADTv2Examples.builder.Specialization</code></td><td>FAIL</td><td>Regression or incomplete implementation. Check the logs for this example.</td></tr>
+<tr class="skipped"><td><code>ADTv2Examples.functions.SimpleFunctions</code></td><td>SKIPPED</td><td>fun need to be updated</td></tr>
+<tr class="fail"><td><code>ADTv2Examples.functions.RecursiveFunctions</code></td><td>FAIL</td><td>Regression or incomplete implementation. Check the logs for this example.</td></tr>
+<tr class="fail"><td><code>ADTv2Examples.functions.HigherOrderRecursion</code></td><td>FAIL</td><td>Regression or incomplete implementation. Check the logs for this example.</td></tr>
+<tr class="fail"><td><code>ADTv2Examples.proofs.InductionOnBool</code></td><td>FAIL</td><td>Regression or incomplete implementation. Check the logs for this example.</td></tr>
+<tr class="fail"><td><code>ADTv2Examples.proofs.InductionOnNat</code></td><td>FAIL</td><td>Regression or incomplete implementation. Check the logs for this example.</td></tr>
+<tr class="fail"><td><code>ADTv2Examples.proofs.TypecheckIntegration</code></td><td>FAIL</td><td>Regression or incomplete implementation. Check the logs for this example.</td></tr>
+<tr class="skipped"><td><code>ADTv2Examples.endtoend.NatAndListLibrary</code></td><td>SKIPPED</td><td>polymorphic self-recursive list recursion is not normalized yet.</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>
