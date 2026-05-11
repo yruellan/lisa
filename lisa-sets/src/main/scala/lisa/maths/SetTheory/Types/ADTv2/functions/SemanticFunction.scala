@@ -40,8 +40,9 @@ class SemanticFunction[N <: Arity](
   val typeVariablesSeq: Seq[Variable[Ind]] = adt.typeVariablesSeq
   val typeArity: N = adt.typeArity
 
+  private val argType: Expr[Ind] = adt.schematicTerm
   val fullName = s"$name"
-  val typ: Expr[Ind] = adt.term ->: returnType
+  val typ: Expr[Ind] = argType ->: returnType
 
 
   private val checkReturnType: Map[SemanticConstructor[N], THM] =

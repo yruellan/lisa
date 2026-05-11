@@ -40,7 +40,7 @@ class SemanticADT[N <: Arity](
   val name: String = underlying.name
 
   /** Identifier of this ADT. */
-  val id: Identifier = underlying.polymorphicTerm.id
+  val id: Identifier = underlying.id
 
   /** Type variables of this ADT. */
   val typeVariables: Variable[Ind] ** N = underlying.typeVariables
@@ -57,13 +57,31 @@ class SemanticADT[N <: Arity](
    *
    *  @param args the instances of this ADT type variables
    */
-  def term(args: Seq[Expr[Ind]]) = appSeq(underlying.polymorphicTerm)(args)
+  def specializedTerm =
+    underlying.specializedTerm
+
+  def term(args: Seq[Expr[Ind]]) = specializedTerm(args)
 
   /**
    *  Term representing this ADT where type variables are instantiated with schematic
    *  variables.
    */
-  val term: Expr[Ind] = underlying.term
+  val term: Expr[Ind] = specializedTerm(typeVariablesSeq)
+
+  /**
+   * Bare polymorphic carrier head from the syntactic layer.
+   *
+   * Kept for low-level proofs that still explicitly work against the raw ADT encoding.
+   */
+  val rawTerm: Expr[Ind] = underlying.term
+
+  /**
+   *  Public schematic carrier used by semantic theorems.
+   *
+   *  For polymorphic ADTs this is `term(A, ...)`, not the bare polymorphic head `term`.
+   */
+  // private[ADTv2] val schematicTerm: Expr[Ind] = term
+  val schematicTerm: Expr[Ind] = term
 
   /**
    *  Theorem --- Injectivity of constructors.
@@ -162,20 +180,20 @@ class SemanticADT[N <: Arity](
    *
    *  `base cases => inductive cases => ∀x ∈ ADT. P(x)`
    */
-  val induction = Lemma(
-    constructors.foldRight[Expr[Prop]](forall(x, x :: term ==> P(x)))((c, f) =>
-      c.inductiveCase ==> f
+  lazy val induction = Lemma(
+    constructors.foldRight[Expr[Prop]](forall(x, x :: schematicTerm ==> P(x)))((c, f) =>
+      c.specializedInductiveCase ==> f
     )
   ) { sp ?=>
     constructors.foldRight[(Expr[Prop], Expr[Prop], sp.Fact)] {
-      val prop = forall(x, x :: term ==> P(x))
+      val prop = forall(x, x :: schematicTerm ==> P(x))
       (prop, prop, have(prop <=> prop) by Restate)
     }((c, acc) =>
       val (oldBefore, oldAfter, fact) = acc
       val newBefore = underlying.inductiveCase(c.underlying) ==> oldBefore
-      val newAfter = c.inductiveCase ==> oldAfter
+      val newAfter = c.specializedInductiveCase ==> oldAfter
 
-      have(underlying.inductiveCase(c.underlying) <=> c.inductiveCase) subproof {
+      have(underlying.inductiveCase(c.underlying) <=> c.specializedInductiveCase) subproof {
         val wellTypedVars: Seq[Expr[Prop]] = wellTyped(c.semanticSignature)
         val wellTypedVarsSet = wellTypedVars.toSet
 
@@ -209,7 +227,7 @@ class SemanticADT[N <: Arity](
           val (fc1, fc2, wellTypedVars) = fc
           ty match
             case SelfRef =>
-              val wellTypedV: Expr[Prop] = v :: term
+              val wellTypedV: Expr[Prop] = v :: schematicTerm
               have(wellTypedVars |- (P(v) ==> fc1) <=> (P(v) ==> fc2)) by Cut(
                 lastStep,
                 leftImpliesEquivalenceWeak of (p := P(v), p1 := fc1, p2 := fc2)
@@ -269,16 +287,20 @@ class SemanticADT[N <: Arity](
               )
               (forall(v, in(v, t) ==> fc1), forall(v, v :: t ==> fc2), wellTypedVars.init)
         )
-        have(thesis) by Restate.from(lastStep)
+        have(thesis) by Tautology.from(lastStep)
       }
       val newFact = have(newBefore <=> newAfter) by Tautology.from(impliesEquivalence, lastStep, fact)
       (newBefore, newAfter, newFact)
     )
-    have(underlying.induction.statement.right.head |- thesis.right.head) by Cut(
-      lastStep,
+    val normalizedEquivalence = lastStep
+    have(underlying.induction.statement.right.head |- underlying.induction.statement.right.head) by Hypothesis
+    have(underlying.induction.statement.right.head |- thesis.right.head) by Tautology.from(
+      normalizedEquivalence,
       equivalenceApply of (
-        p1 := underlying.induction.statement.right.head, p2 := thesis.right.head
-      )
+        p1 := underlying.induction.statement.right.head,
+        p2 := thesis.right.head
+      ),
+      lastStep
     )
     have(thesis) by Cut(underlying.induction, lastStep)
   }
@@ -307,12 +329,12 @@ class SemanticADT[N <: Arity](
    *
    *  `∀x. x ∈ ADT ==> x = c * x1 * ... * xn for some constructor c and xi, ..., xj ∈ ADT`
    */
-  lazy val elim = Lemma(forall(x, x :: term ==> simplify(isConstructor))) {
+  lazy val elim = Lemma(forall(x, x :: schematicTerm ==> simplify(isConstructor))) {
 
     // Induction preconditions with P(z) = z != x
     val inductionPreconditionIneq = constructors
       .map(c =>
-        c -> betaReduce(c.inductiveCase.substitute(P -> lambda(z, !(x === z))))
+        c -> betaReduce(c.specializedInductiveCase.substitute(P -> lambda(z, !(x === z))))
       )
       .toMap
     val inductionPreconditionsIneq = seqAnd(inductionPreconditionIneq.map(_._2))
@@ -348,7 +370,7 @@ class SemanticADT[N <: Arity](
                 val (_, _, finalFact) = c.syntacticSignature(c.variables2).foldRight(seed)((el, acc) =>
                   val (v, ty) = el
                   val (currF, currW, currFact) = acc
-                  val argType = ty.getOrElse(term)
+                  val argType = ty.getOrElse(specializedTerm(typeVariablesSeq))
 
                   have(!currF |- currW) by Restate.from(currFact)
 
@@ -374,7 +396,7 @@ class SemanticADT[N <: Arity](
                   (newF, newW, newFact)
                 )
 
-                have(thesis) by Restate.from(finalFact)
+                have(thesis) by Tautology.from(finalFact)
               }
 
               // STEP 1.1.2: Conclude
@@ -388,17 +410,17 @@ class SemanticADT[N <: Arity](
       }
 
     // STEP 2: Conclude
-    have(inductionPreconditionsIneq |- forall(z, z :: term ==> !(x === z))) by
+    have(inductionPreconditionsIneq |- forall(z, z :: schematicTerm ==> !(x === z))) by
       Restate.from(induction of (P := lambda(z, !(x === z))))
-    thenHave(inductionPreconditionsIneq |- x :: term ==> !(x === x)) by
+    thenHave(inductionPreconditionsIneq |- x :: schematicTerm ==> !(x === x)) by
       InstantiateForall(x)
-    val ind = thenHave(x :: term |- !inductionPreconditionsIneq) by Restate
-    val eliminationCase = have(x :: term |- isConstructor) by
+    val ind = thenHave(x :: schematicTerm |- !inductionPreconditionsIneq) by Restate
+    val eliminationCase = have(x :: schematicTerm |- isConstructor) by
       Cut(lastStep, strengtheningOfInductionPreconditions)
 
-    have(x :: term ==> simplify(isConstructor)) subproof {
-      assume(x :: term)
-      val xTyped = have(x :: term) by Hypothesis
+    have(x :: schematicTerm ==> simplify(isConstructor)) subproof {
+      assume(x :: schematicTerm)
+      val xTyped = have(x :: schematicTerm) by Hypothesis
       have(simplify(isConstructor)) by Tautology.from(eliminationCase, xTyped)
     }
     thenHave(thesis) by RightForall

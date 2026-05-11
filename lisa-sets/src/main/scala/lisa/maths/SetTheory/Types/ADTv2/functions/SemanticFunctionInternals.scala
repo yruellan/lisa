@@ -23,6 +23,7 @@ private[functions] final class SemanticFunctionInternals[N <: Arity](
 ) {
 
   private val typeVariablesSeq: Seq[Variable[Ind]] = adt.typeVariablesSeq
+  private val argType: Expr[Ind] = adt.schematicTerm
 
   val untypedDefinition = (f :: typ) /\ simplify(seqAnd(cases.map((c, caseDef) =>
     val (vars, body) = caseDef
@@ -46,7 +47,7 @@ private[functions] final class SemanticFunctionInternals[N <: Arity](
     )
   ))
 
-  private val witnessBody = { pairWitness ∈ (adt.term × returnType) | caseMembership(pairWitness) }
+  private val witnessBody = { pairWitness ∈ (argType × returnType) | caseMembership(pairWitness) }
 
   // Keep the witness as a polymorphic DEF-backed symbol (same pattern as recursive internals).
   private val witnessClass: Constant[?] = {
@@ -112,7 +113,7 @@ private[functions] final class SemanticFunctionInternals[N <: Arity](
       c: SemanticConstructor[N],
       args: Seq[Variable[Ind]]
   ): THM = Lemma(
-    wellTypedFormula(c.semanticSignature(args)) |- (c.appliedTerm(args) :: adt.term)
+    wellTypedFormula(c.semanticSignature(args)) |- (c.appliedTerm(args) :: argType)
   ) {
     have(c.term(typeVariablesSeq) :: c.typ) by Restate.from(c.intro)
 
@@ -163,7 +164,7 @@ private[functions] final class SemanticFunctionInternals[N <: Arity](
     typ = typ,
     witness = witness,
     witnessDef = witnessClass.definition,
-    witnessBound = adt.term × returnType,
+    witnessBound = argType × returnType,
     pairWitness = pairWitness,
     caseMembership = caseMembership,
     constructorApplicationTyping = (c, args) => constructorApplicationTyping(c, args),

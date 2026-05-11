@@ -52,7 +52,7 @@ def recFun[N <: Arity](adt: ADT[N], returnType: Expr[Ind])(using
         builder.build.map((k, v) => (k.semantic, v)),
         returnType
       )
-      new RecFunction[N](semantic, adt)
+      RecFunction[N](semantic, adt)
     case Some(msg) => throw new IllegalArgumentException(msg)
 }
 

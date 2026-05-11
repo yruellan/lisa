@@ -32,15 +32,15 @@ object Implicits {
     term
 
   implicit def adtToTerm(adt: ADT[?]): Expr[Ind] =
-    asMonomorphicTerm("ADT", adt.name, adt.typeVariablesSeq.size)(adt)
+    asMonomorphicTerm("ADT", adt.name, adt.typeVariablesSeq.size)(adt.term)
 
   implicit def constructorToTerm(c: Constructor[?]): Expr[Ind] =
-    asMonomorphicTerm("Constructor", c.name, c.typeVariablesSeq.size)(c)
+    asMonomorphicTerm("Constructor", c.name, c.typeVariablesSeq.size)(c.term)
 
   implicit def functionToTerm(f: ADTFunction[?]): Expr[Ind] =
     asMonomorphicTerm("Function", f.name, f.typeVariables.toSeq.size)(f.term)
 
   implicit def recFunctionToTerm(f: RecFunction[?]): Expr[Ind] =
-    asMonomorphicTerm("RecFunction", f.name, f.typeVariablesSeq.size)(f)
+    asMonomorphicTerm("RecFunction", f.name, f.typeVariablesSeq.size)(f.term)
 
 }

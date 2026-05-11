@@ -28,11 +28,15 @@ private[encoding] trait SyntacticADTTerm[N <: Arity] extends SyntacticADTHeight[
   val polymorphicTerm = DEF(using name = s"${name}/term")(
     lisa.maths.SetTheory.SetTheory.ε(z, termDefinitionFormula(z))
   )
+  val id = polymorphicTerm.id
 
   polymorphicTerm.printAs(args =>
     if args.isEmpty then s"${name}/term[${typeVariablesSeq.mkString(",")}]"
     else s"${name}/term[${args.mkString(",")}]"
   )
+
+  def specializedTerm(args: Seq[Expr[Ind]]): Expr[Ind] =
+    appSeq(polymorphicTerm)(args)
 
   val term: Expr[Ind] = polymorphicTerm
 

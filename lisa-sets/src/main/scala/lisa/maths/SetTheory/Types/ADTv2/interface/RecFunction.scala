@@ -5,17 +5,26 @@ import lisa.maths.SetTheory.Functions.Function.app
 import lisa.maths.SetTheory.Types.TypingHelpers.{::, FunctionalClass, TypedConstantFunctional}
 import lisa.maths.SetTheory.Types.ADTv2.support.{**, toSeq}
 import lisa.maths.SetTheory.Types.ADTv2.recursion.RecFunSemantics
-import lisa.maths.SetTheory.Types.ADTv2.support.InterfaceHelpers.{introAppAt as buildIntroAppAt, theoremAt}
+import lisa.maths.SetTheory.Types.ADTv2.support.InterfaceHelpers.{introAppAt as buildIntroAppAt, theoremAt, typingTheoremAt}
 import lisa.maths.SetTheory.Types.ADTv2.support.Utils.renderAppliedSymbol
 import lisa.utils.prooflib.ProofTacticLib.Arity
 
-final class RecFunction[N <: Arity](using val line: sourcecode.Line, val file: sourcecode.File, valueOfN: ValueOf[N])(
+final class RecFunctionImpl[N <: Arity, S](using
+    sort: lisa.utils.fol.FOL.IsSort[S],
+    val line: sourcecode.Line,
+    val file: sourcecode.File,
+    valueOfN: ValueOf[N]
+)(
     val semantic: RecFunSemantics[N],
     val adt: ADT[N]
-) extends TypedConstantFunctional[Ind](
+) extends TypedConstantFunctional[S](
       semantic.id,
-      FunctionalClass(Nil, Nil, semantic.typ),
-      semantic.intro
+      FunctionalClass(
+        List.fill(semantic.typeVariablesSeq.size)(None),
+        semantic.typeVariablesSeq.toList,
+        semantic.typ
+      ),
+      typingTheoremAt(semantic.name, semantic.typeVariablesSeq, semantic.intro)
     ) {
 
   printAs(args => renderAppliedSymbol(semantic.name, semantic.typeVariablesSeq.size, args))
@@ -81,7 +90,14 @@ final class RecFunction[N <: Arity](using val line: sourcecode.Line, val file: s
       )
     ).toMap
 
-  def termAt(args: Seq[Expr[Ind]]): Expr[Ind] = semantic.term(args)
+  def termAt(args: Seq[Expr[Ind]]): Expr[Ind] = {
+    require(
+      args.size == typeVariablesSeq.size || args.isEmpty,
+      s"RecFunction $name expects ${typeVariablesSeq.size} type argument(s), got ${args.size}."
+    )
+    val effectiveArgs = if args.isEmpty then typeVariablesSeq else args
+    (this #@@ effectiveArgs).asInstanceOf[Expr[Ind]]
+  }
 
   def applyUnsafe(args: Expr[Ind] ** N): Expr[Ind] = termAt(args.toSeq)
 
@@ -93,7 +109,19 @@ final class RecFunction[N <: Arity](using val line: sourcecode.Line, val file: s
   lazy val debug_classDefinitionFact: THM = semantic.classDefinitionFact
 }
 
+type RecFunction[N <: Arity] = RecFunctionImpl[N, ?]
+
 object RecFunction {
+  def apply[N <: Arity](using
+      line: sourcecode.Line,
+      file: sourcecode.File,
+      valueOfN: ValueOf[N]
+  )(semantic: RecFunSemantics[N], adt: ADT[N]): RecFunction[N] =
+    new RecFunctionImpl[N, semantic.HeadSort](using semantic.headSort, line, file, valueOfN)(
+      semantic,
+      adt
+    )
+
   def selfReferenceName(functionName: String): String = s"${functionName}RecSelf"
 
   def selfPlaceholder(functionName: String): Variable[Ind] =

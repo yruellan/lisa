@@ -112,16 +112,17 @@ final class RecFunSemantics[N <: Arity](
   // Class function DEF — term := ε(f, Def(f))
   // ─────────────────────────────────────────────────────────────────────────
 
-  private val classFunction: Constant[?] = {
-    val classFunctionExpr: Expr[?] = lisa.utils.fol.FOL.Abs.apply(
-      xs = typeVariablesSeq,
-      t = ε(f, untypedDef)
-    )
-    type S
-    given lisa.utils.fol.FOL.IsSort[S] =
-      lisa.utils.fol.FOL.unsafeSortEvidence(classFunctionExpr.sort)
-    DEF(using name = name)(classFunctionExpr.asInstanceOf[Expr[S]])
-  }
+  private val classFunctionExpr: Expr[?] = lisa.utils.fol.FOL.Abs.apply(
+    xs = typeVariablesSeq,
+    t = ε(f, untypedDef)
+  )
+
+  type HeadSort
+  given headSort: lisa.utils.fol.FOL.IsSort[HeadSort] =
+    lisa.utils.fol.FOL.unsafeSortEvidence(classFunctionExpr.sort)
+
+  val classFunction: Constant[HeadSort] =
+    DEF(using name = name)(classFunctionExpr.asInstanceOf[Expr[HeadSort]])
   classFunction.printAs(args => renderAppliedSymbol(name, typeVariablesSeq.size, args))
 
   val id: Identifier = classFunction.id

@@ -57,4 +57,25 @@ object TypecheckIntegration extends lisa.Main {
   val nestedBoolTyping = Theorem((b :: bool) |- not * (not * b) :: bool) {
     have(thesis) by Typecheck.prove
   }
+
+  section("Type specialization")
+
+  val A = variable[Ind]
+  val x = variable[Ind]
+  show(pack.intro)
+  show(pack.introAt(bool))
+  show(pack.introApp)
+  show(pack.introAppAt(bool))
+
+  val packTyping = Theorem(pack(A) :: A ->: box(A)) {
+    have(thesis) by Typecheck.prove
+  }
+
+  val packTyping2 = Theorem( x :: A |- pack(A) * x :: box(A)) {
+    have(thesis) by Typecheck.prove
+  }
+  val packTyping3 = Theorem( x :: bool |- pack(bool) * x :: box(bool)) {
+    have(thesis) by Typecheck.prove
+  }
+
 }

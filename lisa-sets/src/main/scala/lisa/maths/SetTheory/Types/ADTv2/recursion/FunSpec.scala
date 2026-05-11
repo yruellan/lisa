@@ -30,7 +30,7 @@ class FunSpec[N <: Arity](
 ) {
   val typeVariablesSeq: Seq[Variable[Ind]] = adt.typeVariablesSeq
   val typeArity: N = adt.typeArity
-  val argType: Expr[Ind] = adt.term
+  val argType: Expr[Ind] = adt.specializedTerm(typeVariablesSeq)
   val typ: Expr[Ind] = argType ->: returnType
 
   /**

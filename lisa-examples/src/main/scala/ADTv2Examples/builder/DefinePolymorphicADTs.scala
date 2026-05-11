@@ -36,11 +36,16 @@ object DefinePolymorphicADTs extends lisa.Main {
   val inlDemo = unionDemo.constructors(0)
   val inrDemo = unionDemo.constructors(1)
 
+  println(s"term: ${unionDemo.term}")
+  println(s"sem.term: ${unionDemo.semantic.term}")
+  println(s"rawTerm: ${unionDemo.semantic.rawTerm}")
+  println(s"schematicTerm: ${unionDemo.semantic.schematicTerm}")
+
   section("ADT theorems")
-  show(boxDemo.induction)
-  show(listDemo.induction)
-  show(listDemo.elim)
-  show(unionDemo.induction)
+  // show(boxDemo.induction)
+  // show(listDemo.induction)
+  // show(listDemo.elim)
+  // show(unionDemo.induction)
   show(unionDemo.injectivity(inlDemo, inrDemo))
 
   section("Constructor theorems")

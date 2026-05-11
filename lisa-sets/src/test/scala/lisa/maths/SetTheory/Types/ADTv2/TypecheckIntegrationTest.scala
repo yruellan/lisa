@@ -29,4 +29,9 @@ class TypecheckIntegrationTest extends AnyFunSuite with lisa.TestMain {
     val b = variable[Ind]
     assert(((b :: bool) |- not * (not * b) :: bool) != null)
   }
+
+  test("polymorphic constructor application typechecks when the ADT is instantiated") {
+    val x = variable[Ind]
+    assert(((x :: bool) |- pack(bool) * x :: box(bool)) != null)
+  }
 }

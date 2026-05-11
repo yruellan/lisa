@@ -20,6 +20,7 @@ private[functions] final class WitnessCases[N <: Arity](
     witnessMembershipByConstructor: Map[SemanticConstructor[N], JUSTIFICATION],
     constructorApplicationTyping: (SemanticConstructor[N], Seq[Variable[Ind]]) => THM
 ) {
+  private val argType: Expr[Ind] = adt.schematicTerm
 
   lazy val witnessCaseByConstructor: Map[SemanticConstructor[N], THM] =
     (for c <- cases.keys yield
@@ -42,10 +43,10 @@ private[functions] final class WitnessCases[N <: Arity](
         )
         val pairInWitness = thenHave(wellTypedArgs |- pairTerm ∈ witness) by Restate
 
-        val witnessBetween = have(Function.functionBetween(witness)(adt.term)(returnType)) by Tautology.from(
+        val witnessBetween = have(Function.functionBetween(witness)(argType)(returnType)) by Tautology.from(
           BasicTheorems.funcBetweenEqInFuncSpace of (
             f := witness,
-            A := adt.term,
+            A := argType,
             B := returnType
           ),
           witnessHasType
@@ -58,16 +59,16 @@ private[functions] final class WitnessCases[N <: Arity](
           ),
           witnessBetween
         )
-        val witnessDomain = have(Function.dom(witness) === adt.term) by Tautology.from(
+        val witnessDomain = have(Function.dom(witness) === argType) by Tautology.from(
           BasicTheorems.functionBetweenDomain of (
             f := witness,
-            A := adt.term,
+            A := argType,
             B := returnType
           ),
           witnessBetween
         )
 
-        val inputTyping = have(wellTypedArgs |- c.appliedTerm(vars) :: adt.term) by
+        val inputTyping = have(wellTypedArgs |- c.appliedTerm(vars) :: argType) by
           Restate.from(constructorApplicationTyping(c, vars))
         val inputInDomain = have(wellTypedArgs |- c.appliedTerm(vars) ∈ Function.dom(witness)) by
           Congruence.from(inputTyping, witnessDomain)

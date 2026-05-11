@@ -183,6 +183,22 @@ object InterfaceHelpers {
     }
   }
 
+  def typingTheoremAt(using
+      line: sourcecode.Line,
+      file: sourcecode.File
+  )(
+      displayName: String,
+      typeVariables: Seq[Variable[Ind]],
+      baseTheorem: THM
+  ): THM =
+    theoremAt(
+      displayName = displayName,
+      typeVariables = typeVariables,
+      typeArgs = Seq.empty,
+      suffix = "typing",
+      baseTheorem = baseTheorem
+    )
+
   def introAppAt(using
       line: sourcecode.Line,
       file: sourcecode.File
@@ -208,7 +224,7 @@ object InterfaceHelpers {
       if typeArgs.isEmpty then displayName
       else Utils.renderAppliedSymbol(displayName, typeVariables.size, typeArgs)
     val theoremName = s"$theoremOwner/introApp"
-    val headTerm = headTermAt(typeArgs)
+    val headTerm = headTermAt(if typeArgs.isEmpty then typeVariables else typeArgs)
     val headType = headTypeAt(substitutions)
     val typingArgs = typingArgsAt(substitutions)
 

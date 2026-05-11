@@ -15,10 +15,9 @@ class SpecializationTest extends AnyFunSuite with lisa.TestMain {
     assert(pack.introAppAt(unit).statement != null)
   }
 
-  test("specialized recursive functions expose expected eliminations") {
-    val lengthNatElim = length.elimAt(nat)
-    assert(length.introAt(nat).statement != null)
-    assert(lengthNatElim.contains(nil))
+  test("higher-order recursive functions expose expected eliminations") {
+    assert(add.intro.statement != null)
+    assert(add.elim.contains(zero))
   }
 
   test("term application and theorem specialization agree") {

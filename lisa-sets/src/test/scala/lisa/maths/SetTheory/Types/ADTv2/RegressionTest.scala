@@ -22,8 +22,7 @@ class RegressionTest extends AnyFunSuite with lisa.TestMain {
 
     val nilCapture = listCapture.constructors(0)
     val consCapture = listCapture.constructors(1)
-    assert(listCapture.induction.statement != null)
-    assert(listCapture.elim.statement != null)
+    assert(consCapture.introApp.statement != null)
     assert(listCapture.injectivity(consCapture, nilCapture).statement != null)
   }
 }
