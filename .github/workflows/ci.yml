@@ -1,15 +1,23 @@
 name: LISA CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore:
+      - gh-pages
+      - branch-dashboard-cache
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK 
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -28,3 +36,493 @@ jobs:
         run: sbt "lisa-sets / compile"
       - name: Compile examples
         run: sbt "lisa-examples / compile"
+
+  adtv2-feature-check:
+    name: ADTv2 feature check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - order: "01"
+            artifact: "define-monomorphic-adts"
+            main: "ADTv2Examples.builder.DefineMonomorphicADTs"
+            mode: "run"
+            note: ""
+          - order: "02"
+            artifact: "define-polymorphic-adts"
+            main: "ADTv2Examples.builder.DefinePolymorphicADTs"
+            mode: "run"
+            note: ""
+          - order: "03"
+            artifact: "specialization"
+            main: "ADTv2Examples.builder.Specialization"
+            mode: "run"
+            note: ""
+          - order: "04"
+            artifact: "simple-functions"
+            main: "ADTv2Examples.functions.SimpleFunctions"
+            mode: "skip"
+            note: "fun need to be updated"
+          - order: "05"
+            artifact: "recursive-functions"
+            main: "ADTv2Examples.functions.RecursiveFunctions"
+            mode: "run"
+            note: ""
+          - order: "06"
+            artifact: "higher-order-recursion"
+            main: "ADTv2Examples.functions.HigherOrderRecursion"
+            mode: "run"
+            note: ""
+          - order: "07"
+            artifact: "induction-on-bool"
+            main: "ADTv2Examples.proofs.InductionOnBool"
+            mode: "run"
+            note: ""
+          - order: "08"
+            artifact: "induction-on-nat"
+            main: "ADTv2Examples.proofs.InductionOnNat"
+            mode: "run"
+            note: ""
+          - order: "09"
+            artifact: "typecheck-integration"
+            main: "ADTv2Examples.proofs.TypecheckIntegration"
+            mode: "run"
+            note: ""
+          - order: "10"
+            artifact: "nat-and-list-library"
+            main: "ADTv2Examples.endtoend.NatAndListLibrary"
+            mode: "skip"
+            note: "polymorphic self-recursive list recursion is not normalized yet."
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+      - name: Run example
+        id: run-example
+        if: matrix.mode == 'run'
+        run: sbt "lisa-examples / runMain ${{ matrix.main }}"
+      - name: Record feature result
+        if: always()
+        env:
+          EXAMPLE_MAIN: ${{ matrix.main }}
+          EXAMPLE_MODE: ${{ matrix.mode }}
+          EXAMPLE_NOTE: ${{ matrix.note }}
+          RUN_OUTCOME: ${{ steps.run-example.outcome }}
+        run: |
+          mkdir -p feature-result
+
+          if [ "$EXAMPLE_MODE" = "skip" ]; then
+            STATUS="SKIPPED"
+            NOTE="$EXAMPLE_NOTE"
+          elif [ "$RUN_OUTCOME" = "success" ]; then
+            STATUS="PASS"
+            NOTE="Implemented and runnable on this branch."
+          else
+            STATUS="FAIL"
+            NOTE="Regression or incomplete implementation. Check the logs for this example."
+          fi
+
+          printf '%s\t%s\t%s\t%s\n' "${{ matrix.order }}" "$EXAMPLE_MAIN" "$STATUS" "$NOTE" > "feature-result/${{ matrix.order }}-${{ matrix.artifact }}.tsv"
+      - name: Upload feature result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-${{ matrix.order }}-${{ matrix.artifact }}
+          path: feature-result/${{ matrix.order }}-${{ matrix.artifact }}.tsv
+
+  adtv2-feature-summary:
+    name: ADTv2 feature summary
+    runs-on: ubuntu-latest
+    needs: adtv2-feature-check
+    if: always()
+    steps:
+      - name: Download feature results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: feature-*
+          merge-multiple: true
+          path: feature-results
+      - name: Build workflow summary and dashboard assets
+        env:
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          safe_branch="$(printf '%s' "$BRANCH_NAME" | tr '/ ' '--' | tr -cd 'A-Za-z0-9._-')"
+          if [ -z "$safe_branch" ]; then
+            safe_branch="branch"
+          fi
+          branch_hash="$(printf '%s' "$BRANCH_NAME" | sha1sum | cut -c1-12)"
+          branch_slug="${safe_branch}-${branch_hash}"
+          generated_at="$(date -u '+%Y-%m-%d %H:%M:%SZ')"
+          short_sha="$(printf '%s' "$COMMIT_SHA" | cut -c1-7)"
+
+          mkdir -p dashboard-branch
+          printf '%s\n' "$branch_slug" > dashboard-branch/branch-slug.txt
+          printf '%s\n' "$BRANCH_NAME" > dashboard-branch/branch-name.txt
+
+          pass_count=0
+          fail_count=0
+          skip_count=0
+
+          {
+            echo "# ADTv2 feature report"
+            echo
+            echo "Branch: \`$BRANCH_NAME\`"
+            echo
+            echo "Commit: \`$COMMIT_SHA\`"
+            echo
+            echo "Generated at: $generated_at"
+            echo
+            echo "| Example | Status | Notes |"
+            echo "| --- | --- | --- |"
+          } > feature-summary.md
+
+          : > dashboard-rows.html
+          while IFS=$'\t' read -r order main status note; do
+            printf '| `%s` | %s | %s |\n' "$main" "$status" "$note" >> feature-summary.md
+
+            case "$status" in
+              PASS)
+                pass_count=$((pass_count + 1))
+                ;;
+              FAIL)
+                fail_count=$((fail_count + 1))
+                ;;
+              SKIPPED)
+                skip_count=$((skip_count + 1))
+                ;;
+            esac
+
+            status_class="$(printf '%s' "$status" | tr 'A-Z' 'a-z')"
+            printf '<tr class="%s"><td><code>%s</code></td><td>%s</td><td>%s</td></tr>\n' "$status_class" "$main" "$status" "$note" >> dashboard-rows.html
+          done < <(sort feature-results/*.tsv)
+
+          if [ "$fail_count" -gt 0 ]; then
+            overall_status="FAIL"
+          else
+            overall_status="PASS"
+          fi
+
+          printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$BRANCH_NAME" "$branch_slug" "$COMMIT_SHA" "$generated_at" "$overall_status" "$pass_count" "$fail_count" "$skip_count" > dashboard-branch/metadata.tsv
+
+          cat > dashboard-branch/index.html <<EOF
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>ADTv2 feature report - $BRANCH_NAME</title>
+              <style>
+                :root {
+                  color-scheme: light;
+                  --bg: #f5f1e8;
+                  --panel: #fffdf8;
+                  --ink: #1e1b18;
+                  --muted: #6b6257;
+                  --border: #d6cbb9;
+                  --pass: #2f6a3d;
+                  --fail: #8f2d23;
+                  --skip: #8a6a1f;
+                }
+                * { box-sizing: border-box; }
+                body {
+                  margin: 0;
+                  font-family: Georgia, "Iowan Old Style", serif;
+                  background:
+                    radial-gradient(circle at top left, rgba(194, 157, 81, 0.15), transparent 28rem),
+                    linear-gradient(180deg, #f8f3e7 0%, #f0e8d8 100%);
+                  color: var(--ink);
+                }
+                main {
+                  max-width: 960px;
+                  margin: 0 auto;
+                  padding: 3rem 1.5rem 4rem;
+                }
+                .hero, .panel {
+                  background: var(--panel);
+                  border: 1px solid var(--border);
+                  border-radius: 24px;
+                  box-shadow: 0 18px 40px rgba(50, 36, 18, 0.08);
+                }
+                .hero {
+                  padding: 2rem;
+                  margin-bottom: 1.5rem;
+                }
+                h1, h2 {
+                  margin: 0 0 0.75rem;
+                  font-weight: 600;
+                }
+                p {
+                  margin: 0.4rem 0;
+                  color: var(--muted);
+                }
+                .summary {
+                  display: grid;
+                  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                  gap: 1rem;
+                  margin-top: 1.5rem;
+                }
+                .metric {
+                  padding: 1rem;
+                  border-radius: 18px;
+                  background: #faf6ee;
+                  border: 1px solid var(--border);
+                }
+                .metric strong {
+                  display: block;
+                  font-size: 1.75rem;
+                  color: var(--ink);
+                }
+                .panel {
+                  padding: 1.5rem;
+                }
+                table {
+                  width: 100%;
+                  border-collapse: collapse;
+                }
+                th, td {
+                  padding: 0.9rem 0.8rem;
+                  border-bottom: 1px solid var(--border);
+                  text-align: left;
+                  vertical-align: top;
+                }
+                th {
+                  font-size: 0.9rem;
+                  letter-spacing: 0.04em;
+                  text-transform: uppercase;
+                  color: var(--muted);
+                }
+                tr.pass td:nth-child(2) { color: var(--pass); font-weight: 700; }
+                tr.fail td:nth-child(2) { color: var(--fail); font-weight: 700; }
+                tr.skipped td:nth-child(2) { color: var(--skip); font-weight: 700; }
+                code {
+                  font-size: 0.92rem;
+                }
+                a {
+                  color: inherit;
+                }
+              </style>
+            </head>
+            <body>
+              <main>
+                <section class="hero">
+                  <p><a href="../../">All branch reports</a></p>
+                  <h1>ADTv2 feature report</h1>
+                  <p>Branch: <code>$BRANCH_NAME</code></p>
+                  <p>Commit: <code>$COMMIT_SHA</code></p>
+                  <p>Generated at: $generated_at</p>
+                  <div class="summary">
+                    <div class="metric">
+                      <span>Status</span>
+                      <strong>$overall_status</strong>
+                    </div>
+                    <div class="metric">
+                      <span>Passing</span>
+                      <strong>$pass_count</strong>
+                    </div>
+                    <div class="metric">
+                      <span>Failing</span>
+                      <strong>$fail_count</strong>
+                    </div>
+                    <div class="metric">
+                      <span>Skipped</span>
+                      <strong>$skip_count</strong>
+                    </div>
+                  </div>
+                </section>
+                <section class="panel">
+                  <h2>Examples</h2>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Example</th>
+                        <th>Status</th>
+                        <th>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+          $(cat dashboard-rows.html)
+                    </tbody>
+                  </table>
+                </section>
+              </main>
+            </body>
+          </html>
+          EOF
+
+          cat feature-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload feature summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: adtv2-feature-summary
+          path: feature-summary.md
+      - name: Upload dashboard branch assets
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: adtv2-branch-dashboard
+          path: dashboard-branch
+
+  publish-adtv2-dashboard:
+    name: Publish ADTv2 dashboard
+    runs-on: ubuntu-latest
+    needs: adtv2-feature-summary
+    if: github.event_name != 'pull_request' && always()
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download dashboard branch assets
+        uses: actions/download-artifact@v4
+        with:
+          name: adtv2-branch-dashboard
+          path: dashboard-branch
+      - name: Update dashboard cache
+        env:
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          branch_slug="$(cat dashboard-branch/branch-slug.txt)"
+          short_sha="$(printf '%s' "$COMMIT_SHA" | cut -c1-7)"
+
+          if git ls-remote --exit-code --heads origin branch-dashboard-cache >/dev/null 2>&1; then
+            git fetch origin branch-dashboard-cache
+            git worktree add .pages origin/branch-dashboard-cache
+          else
+            git worktree add --detach .pages
+            (
+              cd .pages
+              git checkout --orphan branch-dashboard-cache
+              find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+            )
+          fi
+
+          mkdir -p ".pages/branches"
+          rm -rf ".pages/branches/$branch_slug"
+          mkdir -p ".pages/branches/$branch_slug"
+          cp -R dashboard-branch/. ".pages/branches/$branch_slug/"
+          rm -f ".pages/branches/$branch_slug/branch-slug.txt" ".pages/branches/$branch_slug/branch-name.txt"
+          touch .pages/.nojekyll
+
+          find .pages/branches -mindepth 1 -maxdepth 1 -type d | while read -r dir; do
+            metadata="$dir/metadata.tsv"
+            if [ -f "$metadata" ]; then
+              stored_branch="$(cut -f1 "$metadata")"
+              if ! git ls-remote --exit-code --heads origin "$stored_branch" >/dev/null 2>&1; then
+                rm -rf "$dir"
+              fi
+            fi
+          done
+
+          {
+            echo '<!doctype html>'
+            echo '<html lang="en">'
+            echo '  <head>'
+            echo '    <meta charset="utf-8">'
+            echo '    <meta name="viewport" content="width=device-width, initial-scale=1">'
+            echo "    <title>ADTv2 branch dashboard</title>"
+            echo '    <style>'
+            echo '      :root { color-scheme: light; --bg: #f4efe5; --panel: #fffdf8; --ink: #1e1a16; --muted: #6e655b; --border: #d6cab8; --pass: #2f6a3d; --fail: #8f2d23; --skip: #8a6a1f; }'
+            echo '      * { box-sizing: border-box; }'
+            echo '      body { margin: 0; font-family: Georgia, "Iowan Old Style", serif; color: var(--ink); background: linear-gradient(180deg, #fbf6eb 0%, #efe6d4 100%); }'
+            echo '      main { max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }'
+            echo '      .hero, .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 24px; box-shadow: 0 18px 40px rgba(50, 36, 18, 0.08); }'
+            echo '      .hero { padding: 2rem; margin-bottom: 1.5rem; }'
+            echo '      .panel { padding: 1.5rem; }'
+            echo '      h1, h2 { margin: 0 0 0.75rem; font-weight: 600; }'
+            echo '      p { margin: 0.35rem 0; color: var(--muted); }'
+            echo '      table { width: 100%; border-collapse: collapse; }'
+            echo '      th, td { padding: 0.9rem 0.8rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }'
+            echo '      th { font-size: 0.9rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }'
+            echo '      tr.pass td:nth-child(2) { color: var(--pass); font-weight: 700; }'
+            echo '      tr.fail td:nth-child(2) { color: var(--fail); font-weight: 700; }'
+            echo '      tr.skip td:nth-child(2) { color: var(--skip); font-weight: 700; }'
+            echo '      code { font-size: 0.92rem; }'
+            echo '      a { color: inherit; }'
+            echo '    </style>'
+            echo '  </head>'
+            echo '  <body>'
+            echo '    <main>'
+            echo '      <section class="hero">'
+            echo '        <h1>ADTv2 branch dashboard</h1>'
+            echo "        <p>Repository: <code>$REPOSITORY</code></p>"
+            echo '        <p>Each row points to the latest report published for that branch.</p>'
+            echo '      </section>'
+            echo '      <section class="panel">'
+            echo '        <h2>Branches</h2>'
+            echo '        <table>'
+            echo '          <thead>'
+            echo '            <tr>'
+            echo '              <th>Branch</th>'
+            echo '              <th>Status</th>'
+            echo '              <th>Examples</th>'
+            echo '              <th>Commit</th>'
+            echo '              <th>Updated</th>'
+            echo '            </tr>'
+            echo '          </thead>'
+            echo '          <tbody>'
+
+            while IFS=$'\t' read -r branch slug commit generated status pass_count fail_count skip_count; do
+              row_class="pass"
+              if [ "$status" = "FAIL" ]; then
+                row_class="fail"
+              elif [ "$skip_count" -gt 0 ] && [ "$pass_count" -eq 0 ] && [ "$fail_count" -eq 0 ]; then
+                row_class="skip"
+              fi
+              short_commit="$(printf '%s' "$commit" | cut -c1-7)"
+              printf '            <tr class="%s"><td><a href="branches/%s/">%s</a></td><td>%s</td><td>%s pass / %s fail / %s skipped</td><td><code>%s</code></td><td>%s</td></tr>\n' "$row_class" "$slug" "$branch" "$status" "$pass_count" "$fail_count" "$skip_count" "$short_commit" "$generated"
+            done < <(find .pages/branches -name metadata.tsv | sort)
+
+            echo '          </tbody>'
+            echo '        </table>'
+            echo '      </section>'
+            echo '    </main>'
+            echo '  </body>'
+            echo '</html>'
+          } > .pages/index.html
+
+          cd .pages
+          git add .
+          if git diff --cached --quiet; then
+            echo "No dashboard changes to publish."
+          else
+            git commit -m "Update ADTv2 dashboard for ${BRANCH_NAME} @ ${short_sha}"
+            git push origin HEAD:branch-dashboard-cache
+          fi
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages
+          include-hidden-files: true
+
+  deploy-adtv2-dashboard:
+    name: Deploy ADTv2 dashboard
+    runs-on: ubuntu-latest
+    needs: publish-adtv2-dashboard
+    if: github.event_name != 'pull_request' && always()
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
